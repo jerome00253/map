@@ -1,0 +1,22 @@
+services:
+    tileserver:
+        image: maptiler/tileserver-gl
+        volumes:
+            - ./data/maps:/data
+        ports:
+            - "8258:8080"
+
+    martin:
+        image: ghcr.io/maplibre/martin:latest
+        volumes:
+            - ./data/maps:/maps:ro
+        ports:
+            - "3233:3000"
+        command: --listen-addresses 0.0.0.0:3000 /maps/unified_focus_z14.mbtiles
+
+    web:
+        image: nginx:alpine
+        volumes:
+            - ./public:/usr/share/nginx/html:ro
+        ports:
+            - "8257:80"

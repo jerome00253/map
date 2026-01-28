@@ -1,0 +1,6 @@
+# Martin configuration
+srv: 0.0.0.0:3000
+
+mbtiles:
+  unified_focus_z14: /maps/unified_focus_z14.mbtiles
+  optimized: /maps/optimized.mbtiles

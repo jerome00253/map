@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tileserver-GL - Carte</title>
+
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        .back-link {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            text-decoration: none;
+            color: #333;
+            font-family: sans-serif;
+            font-size: 13px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .back-link:hover {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <a href="index.html" class="back-link">← Retour</a>
+
+    <script>
+        const host = window.location.hostname;
+        const tileserverUrl = `http://${host}:8258`;
+
+        async function initMap() {
+            try {
+                const configRes = await fetch('/map_config.json');
+                const mapConfig = await configRes.json();
+
+                const response = await fetch('/styles/style.json');
+                if (!response.ok) throw new Error(`Erreur HTTP ${response.status}`);
+                const style = await response.json();
+
+                const origin = window.location.origin;
+
+                if (style.sprite) style.sprite = origin + (style.sprite.startsWith('/') ? '' : '/') + style.sprite;
+                if (style.glyphs) style.glyphs = origin + (style.glyphs.startsWith('/') ? '' : '/') + style.glyphs;
+
+                if (style.sources && style.sources.openmaptiles) {
+                    style.sources.openmaptiles.url = tileserverUrl + '/data/openmaptiles.json';
+                }
+
+                const map = new maplibregl.Map({
+                    container: 'map',
+                    style: style,
+                    center: [7.75, 48.58],
+                    zoom: 12,
+                    maxZoom: 19,
+                    transformRequest: (url) => {
+                        if (url.includes(':8258')) {
+                            const newUrl = new URL(url);
+                            newUrl.hostname = host;
+                            return { url: newUrl.toString() };
+                        }
+                        return { url };
+                    }
+                });
+
+                // Zoom limit based on position
+                const detailedBounds = {
+                    minLng: mapConfig.bbox[0], maxLng: mapConfig.bbox[2],
+                    minLat: mapConfig.bbox[1], maxLat: mapConfig.bbox[3]
+                };
+
+                const enforceZoomLimit = () => {
+                    const center = map.getCenter();
+                    const isInside = center.lng >= detailedBounds.minLng && center.lng <= detailedBounds.maxLng &&
+                        center.lat >= detailedBounds.minLat && center.lat <= detailedBounds.maxLat;
+                    const targetMaxZoom = isInside ? mapConfig.max_zoom_detailed : mapConfig.max_zoom_global;
+                    if (map.getMaxZoom() !== targetMaxZoom) map.setMaxZoom(targetMaxZoom);
+                    if (map.getZoom() > targetMaxZoom) map.setZoom(targetMaxZoom);
+                };
+
+                map.on('move', enforceZoomLimit);
+                enforceZoomLimit();
+
+                map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+                map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
+
+                // Custom 3D control integrated in nav group
+                class Toggle3DControl {
+                    onAdd(map) {
+                        this._map = map;
+                        this._container = document.createElement('div');
+                        this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+
+                        this._btn3D = document.createElement('button');
+                        this._btn3D.type = 'button';
+                        this._btn3D.title = 'Bâtiments 3D';
+                        this._btn3D.textContent = '3D';
+                        this._btn3D.style.cssText = 'font-weight:bold;font-size:13px;cursor:pointer;';
+                        this._btn3D.addEventListener('click', () => this._activate3D());
+
+                        this._btn2D = document.createElement('button');
+                        this._btn2D.type = 'button';
+                        this._btn2D.title = 'Revenir en 2D';
+                        this._btn2D.textContent = '2D';
+                        this._btn2D.style.cssText = 'font-weight:bold;font-size:13px;cursor:pointer;display:none;';
+                        this._btn2D.addEventListener('click', () => this._activate2D());
+
+                        this._container.appendChild(this._btn3D);
+                        this._container.appendChild(this._btn2D);
+                        return this._container;
+                    }
+                    onRemove() { this._container.remove(); }
+                    _activate3D() {
+                        const m = this._map;
+                        if (!m.getLayer('3d-buildings')) {
+                            m.addLayer({
+                                'id': '3d-buildings', 'source': 'openmaptiles',
+                                'source-layer': 'building', 'type': 'fill-extrusion', 'minzoom': 14,
+                                'paint': {
+                                    'fill-extrusion-color': '#aaa',
+                                    'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'render_height']],
+                                    'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'render_min_height']],
+                                    'fill-extrusion-opacity': 0.8
+                                }
+                            });
+                        }
+                        m.flyTo({ pitch: 45, duration: 800 });
+                        this._btn3D.style.display = 'none';
+                        this._btn2D.style.display = '';
+                    }
+                    _activate2D() {
+                        const m = this._map;
+                        if (m.getLayer('3d-buildings')) m.removeLayer('3d-buildings');
+                        m.flyTo({ pitch: 0, bearing: 0, duration: 800 });
+                        this._btn2D.style.display = 'none';
+                        this._btn3D.style.display = '';
+                    }
+                }
+                map.addControl(new Toggle3DControl(), 'bottom-right');
+
+            } catch (e) {
+                console.error(e);
+                document.getElementById('map').innerHTML = `
+                    <div style="padding:20px; color:#c00; font-family:sans-serif;">
+                        <p>Erreur de chargement: ${e.message}</p>
+                    </div>`;
+            }
+        }
+
+        initMap();
+    </script>
+</body>
+
+</html>

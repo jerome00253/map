@@ -1,0 +1,20 @@
+{
+	"options": {
+		"paths": {
+			"root": "/data",
+			"styles": "styles",
+			"fonts": "fonts",
+			"sprites": "sprites"
+		}
+	},
+	"styles": {
+		"bright": {
+			"style": "osm-bright.json"
+		}
+	},
+	"data": {
+		"openmaptiles": {
+			"mbtiles": "unified_focus_z14.mbtiles"
+		}
+	}
+}

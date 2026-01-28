@@ -1,0 +1,23 @@
+# General
+.DS_Store
+*.log
+*.bak
+
+# Map Data (Master Sources)
+data/maps/*.mbtiles
+# Ignore font extraction directories but keep zips
+data/maps/fonts/*/
+!data/maps/fonts/*.zip
+!data/maps/fonts/fontstacks.json
+# Track configs and scripts
+!data/maps/config*.json
+!data/maps/*.py
+# Track sprites master
+!data/maps/sprites/
+
+# Deployment Targets (Generated/Copied)
+/public/fonts/
+/public/sprites/
+
+# Docker
+.env
